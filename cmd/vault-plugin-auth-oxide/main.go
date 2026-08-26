@@ -2,20 +2,23 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"slices"
-	"strings"
+	"time"
 
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/helper/locksutil"
 	"github.com/hashicorp/vault/sdk/helper/tokenutil"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/hashicorp/vault/sdk/plugin"
+	"github.com/oxidecomputer/oxide.go/oxide"
 )
 
 func main() {
@@ -42,11 +45,14 @@ func Factory(ctx context.Context, c *logical.BackendConfig) (logical.Backend, er
 	if err := b.Setup(ctx, c); err != nil {
 		return nil, err
 	}
+	b.locks = locksutil.CreateLocks()
 	return b, nil
 }
 
 type backend struct {
 	*framework.Backend
+
+	locks []*locksutil.LockEntry
 }
 
 const backendHelp = "The Oxide plugin backend allows Oxide instances to authenticate to Vault using instance attestation."
@@ -54,22 +60,43 @@ const backendHelp = "The Oxide plugin backend allows Oxide instances to authenti
 func Backend(c *logical.BackendConfig) *backend {
 	var b backend
 
+	configPath := &framework.Path{
+		Pattern: "config/" + framework.GenericNameRegex("name"),
+		Fields: map[string]*framework.FieldSchema{
+			"name": {
+				Type: framework.TypeString,
+			},
+			"platform_identity": {
+				Type: framework.TypeString,
+			},
+			"host": {
+				Type: framework.TypeString,
+			},
+			"token": {
+				Type: framework.TypeString,
+			},
+		},
+		Callbacks: map[logical.Operation]framework.OperationFunc{
+			logical.CreateOperation: b.pathConfigCreateUpdate,
+			logical.UpdateOperation: b.pathConfigCreateUpdate,
+			logical.DeleteOperation: b.pathConfigDelete,
+			logical.ReadOperation:   b.pathConfigRead,
+		},
+		ExistenceCheck: b.pathConfigExistenceCheck,
+	}
 	rolePath := &framework.Path{
 		Pattern: "role/" + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
 			"name": {
 				Type: framework.TypeString,
 			},
-			"bound_silo_ids": {
-				Type: framework.TypeCommaStringSlice,
+			"config": {
+				Type: framework.TypeString,
 			},
 			"bound_project_ids": {
 				Type: framework.TypeCommaStringSlice,
 			},
 			"bound_instance_ids": {
-				Type: framework.TypeCommaStringSlice,
-			},
-			"bound_silo_names": {
 				Type: framework.TypeCommaStringSlice,
 			},
 			"bound_project_names": {
@@ -93,6 +120,7 @@ func Backend(c *logical.BackendConfig) *backend {
 		Help:        backendHelp,
 		BackendType: logical.TypeCredential,
 		Paths: []*framework.Path{
+			configPath,
 			rolePath,
 			{
 				Pattern: "role/?",
@@ -117,6 +145,9 @@ func Backend(c *logical.BackendConfig) *backend {
 					"role": {
 						Type: framework.TypeString,
 					},
+					"nonce": {
+						Type: framework.TypeString,
+					},
 				},
 				Callbacks: map[logical.Operation]framework.OperationFunc{
 					logical.UpdateOperation: b.pathAuthLogin,
@@ -134,197 +165,12 @@ func Backend(c *logical.BackendConfig) *backend {
 	return &b
 }
 
-func (b *backend) role(ctx context.Context, s logical.Storage, name string) (*oxideRole, error) {
-	raw, err := s.Get(ctx, "role/"+strings.ToLower(name))
-	if err != nil {
-		return nil, err
-	}
-	if raw == nil {
-		return nil, nil
-	}
-
-	role := new(oxideRole)
-	if err := json.Unmarshal(raw.Value, role); err != nil {
-		return nil, err
-	}
-
-	return role, nil
-}
-
-func (b *backend) pathRoleCreateUpdate(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	roleName := d.Get("name").(string)
-	if roleName == "" {
-		return logical.ErrorResponse("must set role name"), nil
-	}
-
-	role, err := b.role(ctx, req.Storage, roleName)
-	if err != nil {
-		return nil, err
-	}
-
-	if role == nil {
-		if req.Operation == logical.UpdateOperation {
-			return nil, errors.New("role entry not found during update operation")
-		}
-		role = new(oxideRole)
-	}
-
-	if boundSiloIDs, ok := d.GetOk("bound_silo_ids"); ok {
-		role.BoundSiloIDs = boundSiloIDs.([]string)
-	}
-	if boundProjectIDs, ok := d.GetOk("bound_project_ids"); ok {
-		role.BoundProjectIDs = boundProjectIDs.([]string)
-	}
-	if boundInstanceIDs, ok := d.GetOk("bound_instance_ids"); ok {
-		role.BoundInstanceIDs = boundInstanceIDs.([]string)
-	}
-	if boundSiloNames, ok := d.GetOk("bound_silo_names"); ok {
-		role.BoundSiloNames = boundSiloNames.([]string)
-	}
-	if boundProjectNames, ok := d.GetOk("bound_project_names"); ok {
-		role.BoundProjectNames = boundProjectNames.([]string)
-	}
-	if boundInstanceNames, ok := d.GetOk("bound_instance_names"); ok {
-		role.BoundInstanceNames = boundInstanceNames.([]string)
-	}
-
-	if err := role.ParseTokenFields(req, d); err != nil {
-		return nil, err
-	}
-
-	entry, err := logical.StorageEntryJSON("role/"+strings.ToLower(roleName), role)
-	if err != nil {
-		return nil, err
-	}
-	if entry == nil {
-		return nil, fmt.Errorf("failed to create storage entry for role %s", roleName)
-	}
-	if err = req.Storage.Put(ctx, entry); err != nil {
-		return nil, err
-	}
-
-	return &logical.Response{}, nil
-}
-
-func (b *backend) pathRoleDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	roleName := d.Get("name").(string)
-	if roleName == "" {
-		return logical.ErrorResponse("must set role name"), nil
-	}
-
-	if err := req.Storage.Delete(ctx, "role/"+strings.ToLower(roleName)); err != nil {
-		return nil, err
-	}
-
-	return &logical.Response{}, nil
-}
-
-func (b *backend) pathRoleRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	roleName := d.Get("name").(string)
-	if roleName == "" {
-		return logical.ErrorResponse("must set role name"), nil
-	}
-	role, err := b.role(ctx, req.Storage, roleName)
-	if err != nil {
-		return nil, err
-	}
-	if role == nil {
-		return nil, nil
-	}
-	data := map[string]any{
-		"bound_silo_ids":       role.BoundSiloIDs,
-		"bound_project_ids":    role.BoundProjectIDs,
-		"bound_instance_ids":   role.BoundInstanceIDs,
-		"bound_silo_names":     role.BoundSiloNames,
-		"bound_project_names":  role.BoundProjectNames,
-		"bound_instance_names": role.BoundInstanceNames,
-	}
-	role.PopulateTokenData(data)
-	return &logical.Response{
-		Data: data,
-	}, nil
-}
-
-func (b *backend) pathRoleList(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	roles, err := req.Storage.List(ctx, "role/")
-	if err != nil {
-		return nil, err
-	}
-	return logical.ListResponse(roles), nil
-}
-
-func (b *backend) pathRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
-	role, err := b.role(ctx, req.Storage, data.Get("name").(string))
-	if err != nil {
-		return false, err
-	}
-	return role != nil, nil
-}
-
-func (b *backend) pathAuthNonce(_ context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	return &logical.Response{}, nil
-}
-
-func (b *backend) pathAuthLogin(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
-	attestation := d.Get("attestation").(string)
-
-	instanceDetails, err := b.verifyAttestation(ctx, attestation)
-	if err != nil {
-		return nil, logical.ErrInvalidCredentials
-	}
-
-	roleName := d.Get("role").(string)
-	role, err := b.role(ctx, req.Storage, roleName)
-	if err != nil {
-		return nil, err
-	}
-	if role == nil {
-		return nil, logical.ErrInvalidCredentials
-	}
-	if err := b.verifyAuthRole(role, instanceDetails); err != nil {
-		return nil, err
-	}
-
-	metadata := map[string]string{
-		"instanceID":   instanceDetails.InstanceID,
-		"projectID":    instanceDetails.ProjectID,
-		"siloID":       instanceDetails.SiloID,
-		"instanceName": instanceDetails.InstanceName,
-		"projectName":  instanceDetails.ProjectName,
-		"siloName":     instanceDetails.SiloName,
-	}
-	auth := &logical.Auth{
-		DisplayName: instanceDetails.InstanceID,
-		Alias: &logical.Alias{
-			Name:     instanceDetails.InstanceID,
-			Metadata: metadata,
-		},
-		Metadata: metadata,
-		InternalData: map[string]any{
-			"role": roleName,
-		},
-	}
-
-	role.PopulateTokenAuth(auth)
-	auth.Renewable = false
-
-	return &logical.Response{
-		Auth: auth,
-	}, nil
-}
-
-func (b *backend) verifyAuthRole(role *oxideRole, details instanceDetails) error {
-	if role.BoundSiloIDs != nil && !slices.Contains(role.BoundSiloIDs, details.SiloID) {
-		return logical.CodedError(http.StatusForbidden, "silo id not authorized")
-	}
+func (b *backend) verifyAuthRole(role *oxideRole, details *instanceDetails) error {
 	if role.BoundProjectIDs != nil && !slices.Contains(role.BoundProjectIDs, details.ProjectID) {
 		return logical.CodedError(http.StatusForbidden, "project id not authorized")
 	}
 	if role.BoundInstanceIDs != nil && !slices.Contains(role.BoundInstanceIDs, details.InstanceID) {
 		return logical.CodedError(http.StatusForbidden, "instance id not authorized")
-	}
-	if role.BoundSiloNames != nil && !slices.Contains(role.BoundSiloIDs, details.SiloName) {
-		return logical.CodedError(http.StatusForbidden, "silo name not authorized")
 	}
 	if role.BoundProjectNames != nil && !slices.Contains(role.BoundProjectNames, details.ProjectName) {
 		return logical.CodedError(http.StatusForbidden, "project name not authorized")
@@ -335,34 +181,163 @@ func (b *backend) verifyAuthRole(role *oxideRole, details instanceDetails) error
 	return nil
 }
 
-func (b *backend) verifyAttestation(ctx context.Context, _ string) (instanceDetails, error) {
-	return instanceDetails{
-		SiloID:       "0001",
-		ProjectID:    "0002",
-		InstanceID:   "0003",
-		SiloName:     "my-silo",
-		ProjectName:  "my-project",
-		InstanceName: "my-instance",
+type rawAttestation struct {
+	Attest attestation `json:"Attest"`
+}
+
+func (a *rawAttestation) parse() (*parsedAttestation, error) {
+	certs := make([]*x509.Certificate, len(a.Attest.CertChain))
+	for idx, certBytes := range a.Attest.CertChain {
+		cert, err := x509.ParseCertificate(intSliceToBytes(certBytes))
+		if err != nil {
+			return nil, err
+		}
+		certs[idx] = cert
+	}
+
+	var platformLog []byte
+	var instanceLog []byte
+	var conf vmInstanceConf
+
+	for _, log := range a.Attest.MeasurementLogs {
+		switch log.Rot {
+		case "OxidePlatform":
+			platformLog = intSliceToBytes(log.Data)
+		case "OxideInstance":
+			instanceLog = intSliceToBytes(log.Data)
+			if err := json.Unmarshal(instanceLog, &conf); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("got unexpected rot type %q", log.Rot)
+		}
+	}
+
+	return &parsedAttestation{
+		signature:      intSliceToBytes(a.Attest.Attestation),
+		certChain:      certs,
+		platformLog:    platformLog,
+		instanceLog:    instanceLog,
+		vmInstanceConf: conf,
+	}, nil
+}
+
+func intSliceToBytes(in []int) []byte {
+	b := make([]byte, len(in))
+	for idx, i := range in {
+		b[idx] = byte(i)
+	}
+	return b
+}
+
+type attestation struct {
+	Attestation     []int            `json:"attestation"`
+	CertChain       [][]int          `json:"cert_chain"`
+	MeasurementLogs []measurementLog `json:"measurement_logs"`
+}
+
+type measurementLog struct {
+	Rot  string `json:"rot"`
+	Data []int  `json:"data"`
+}
+
+type parsedAttestation struct {
+	signature      []byte
+	certChain      []*x509.Certificate
+	platformLog    []byte
+	instanceLog    []byte
+	vmInstanceConf vmInstanceConf
+}
+
+type vmInstanceConf struct {
+	Uuid    string `json:"uuid"`
+	Project string `json:"project"`
+	Silo    string `json:"silo"`
+}
+
+// verifyNonce checks that the nonce is valid and not expired, then deletes it from storage.
+func (b *backend) verifyNonce(ctx context.Context, storage logical.Storage, nonce string) error {
+	if _, err := hex.DecodeString(nonce); err != nil {
+		return fmt.Errorf("invalid nonce %q", nonce)
+	}
+
+	// Lock using a striped lock so that multiple callers can't consume the same nonce.
+	lock := locksutil.LockForKey(b.locks, nonce)
+	lock.Lock()
+	defer lock.Unlock()
+
+	nonceKey := "nonce/" + nonce
+	raw, err := storage.Get(ctx, nonceKey)
+	if err != nil {
+		return err
+	}
+	if raw == nil {
+		return fmt.Errorf("got empty state for nonce %q", nonce)
+	}
+
+	var state nonceState
+	if err := json.Unmarshal(raw.Value, &state); err != nil {
+		return err
+	}
+	if time.Now().After(state.ExpiresAt) {
+		return fmt.Errorf("nonce %q expired at %q", nonce, state.ExpiresAt)
+	}
+	if err := storage.Delete(ctx, nonceKey); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage, client *oxide.Client, config *oxideConfig, attestation string, nonce string) (*instanceDetails, error) {
+	var raw rawAttestation
+	if err := json.Unmarshal([]byte(attestation), &raw); err != nil {
+		return nil, err
+	}
+	parsed, err := raw.parse()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := b.verifyNonce(ctx, storage, nonce); err != nil {
+		return nil, err
+	}
+
+	if err := verifyAttestationSignature(nonce, config, parsed); err != nil {
+		return nil, err
+	}
+
+	instance, err := client.InstanceView(ctx, oxide.InstanceViewParams{
+		Instance: oxide.NameOrId(parsed.vmInstanceConf.Uuid),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if instance.ProjectId != parsed.vmInstanceConf.Project {
+		return nil, fmt.Errorf("expected project id %q, got %q", parsed.vmInstanceConf.Project, instance.ProjectId)
+	}
+
+	project, err := client.ProjectView(ctx, oxide.ProjectViewParams{
+		Project: oxide.NameOrId(instance.ProjectId),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Verify silo
+
+	return &instanceDetails{
+		ProjectID:    instance.ProjectId,
+		InstanceID:   instance.Id,
+		ProjectName:  string(project.Name),
+		InstanceName: string(instance.Name),
 	}, nil
 }
 
 type instanceDetails struct {
 	InstanceID string
 	ProjectID  string
-	SiloID     string
 
 	InstanceName string
 	ProjectName  string
-	SiloName     string
-}
-
-type oxideRole struct {
-	tokenutil.TokenParams
-
-	BoundSiloIDs       []string `json:"bound_silo_ids"`
-	BoundProjectIDs    []string `json:"bound_project_ids"`
-	BoundInstanceIDs   []string `json:"bound_instance_ids"`
-	BoundSiloNames     []string `json:"bound_silo_names"`
-	BoundProjectNames  []string `json:"bound_project_names"`
-	BoundInstanceNames []string `json:"bound_instance_names"`
 }
