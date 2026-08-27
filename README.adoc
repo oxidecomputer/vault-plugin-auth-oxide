@@ -1,0 +1,3 @@
+= vault-plugin-auth-oxide
+
+A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via attestation/RFD 605.

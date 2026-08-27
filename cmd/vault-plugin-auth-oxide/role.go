@@ -17,7 +17,7 @@ import (
 type oxideRole struct {
 	tokenutil.TokenParams
 
-	Config             string   `json:"config"`
+	Verifier           string   `json:"verifier"`
 	BoundProjectIDs    []string `json:"bound_project_ids"`
 	BoundInstanceIDs   []string `json:"bound_instance_ids"`
 	BoundProjectNames  []string `json:"bound_project_names"`
@@ -31,7 +31,7 @@ func (b *backend) pathRole() *framework.Path {
 			"name": {
 				Type: framework.TypeString,
 			},
-			"config": {
+			"verifier": {
 				Type: framework.TypeString,
 			},
 			"bound_project_ids": {
@@ -106,11 +106,11 @@ func (b *backend) handleRoleCreateUpdate(ctx context.Context, req *logical.Reque
 		role = new(oxideRole)
 	}
 
-	if config, ok := d.GetOk("config"); ok {
-		role.Config = config.(string)
+	if verifier, ok := d.GetOk("verifier"); ok {
+		role.Verifier = verifier.(string)
 	}
-	if role.Config == "" {
-		return nil, fmt.Errorf("config field must be set")
+	if role.Verifier == "" {
+		return nil, fmt.Errorf("verifier field must be set")
 	}
 
 	if boundProjectIDs, ok := d.GetOk("bound_project_ids"); ok {
@@ -208,7 +208,7 @@ func (b *backend) handleRoleRead(ctx context.Context, req *logical.Request, d *f
 		return nil, nil
 	}
 	data := map[string]any{
-		"config":               role.Config,
+		"verifier":             role.Verifier,
 		"bound_project_ids":    role.BoundProjectIDs,
 		"bound_instance_ids":   role.BoundInstanceIDs,
 		"bound_project_names":  role.BoundProjectNames,

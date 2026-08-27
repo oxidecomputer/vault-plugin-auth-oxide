@@ -100,7 +100,7 @@ func parsePlatformCert(raw []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(block.Bytes)
 }
 
-func verifyAttestationSignature(nonce string, config *oxideConfig, attestation *parsedAttestation) error {
+func verifyAttestationSignature(nonce string, verifier *oxideVerifier, attestation *parsedAttestation) error {
 	if len(attestation.certChain) == 0 {
 		return errors.New("expected at least one cert, got none")
 	}
@@ -115,7 +115,7 @@ func verifyAttestationSignature(nonce string, config *oxideConfig, attestation *
 	}
 
 	// The final cert in the cert chain must have been signed by the platform root.
-	platformIdentity, err := parsePlatformCert([]byte(config.PlatformIdentity))
+	platformIdentity, err := parsePlatformCert([]byte(verifier.PlatformIdentity))
 	if err != nil {
 		return err
 	}

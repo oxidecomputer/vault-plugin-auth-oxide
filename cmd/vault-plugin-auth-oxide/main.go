@@ -55,7 +55,7 @@ func Backend(c *logical.BackendConfig) *backend {
 		Help:        backendHelp,
 		BackendType: logical.TypeCredential,
 		Paths: []*framework.Path{
-			b.pathConfig(),
+			b.pathVerifier(),
 			b.pathRole(),
 			b.pathListRole(),
 			b.pathAuthNonce(),

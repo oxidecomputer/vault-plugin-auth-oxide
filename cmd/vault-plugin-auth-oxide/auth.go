@@ -86,20 +86,20 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 
 	nonce := d.Get("nonce").(string)
 
-	config, err := b.getConfig(ctx, req.Storage, role.Config)
+	verifier, err := b.getVerifier(ctx, req.Storage, role.Verifier)
 	if err != nil {
 		return nil, err
 	}
-	if config == nil {
-		return nil, fmt.Errorf("got empty config from config key %q", role.Config)
+	if verifier == nil {
+		return nil, fmt.Errorf("got empty verifier from verifier key %q", role.Verifier)
 	}
 
-	oxideClient, err := oxide.NewClient(oxide.WithHost(config.Host), oxide.WithToken(config.Token))
+	oxideClient, err := oxide.NewClient(oxide.WithHost(verifier.Host), oxide.WithToken(verifier.Token))
 	if err != nil {
 		return nil, err
 	}
 
-	instanceDetails, err := b.verifyAttestation(ctx, req.Storage, oxideClient, config, attestation, nonce)
+	instanceDetails, err := b.verifyAttestation(ctx, req.Storage, oxideClient, verifier, attestation, nonce)
 	if err != nil {
 		b.Logger().Warn("error verifying attestation", "role", role, "error", err)
 		return nil, logical.ErrInvalidCredentials
@@ -135,7 +135,7 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 	}, nil
 }
 
-func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage, client *oxide.Client, config *oxideConfig, attestation string, nonce string) (*instanceDetails, error) {
+func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage, client *oxide.Client, verifier *oxideVerifier, attestation string, nonce string) (*instanceDetails, error) {
 	var raw rawAttestation
 	if err := json.Unmarshal([]byte(attestation), &raw); err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage
 		return nil, err
 	}
 
-	if err := verifyAttestationSignature(nonce, config, parsed); err != nil {
+	if err := verifyAttestationSignature(nonce, verifier, parsed); err != nil {
 		return nil, err
 	}
 
