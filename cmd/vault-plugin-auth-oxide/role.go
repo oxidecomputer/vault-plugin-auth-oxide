@@ -53,7 +53,7 @@ func (b *backend) pathRole() *framework.Path {
 			logical.DeleteOperation: b.handleRoleDelete,
 			logical.ReadOperation:   b.handleRoleRead,
 		},
-		ExistenceCheck: b.pathRoleExistenceCheck,
+		ExistenceCheck: b.handleRoleExistenceCheck,
 	}
 	tokenutil.AddTokenFields(path.Fields)
 
@@ -65,7 +65,7 @@ func (b *backend) pathListRole() *framework.Path {
 		Pattern: "role/?",
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.ListOperation: &framework.PathOperation{
-				Callback: b.pathRoleList,
+				Callback: b.handleRoleList,
 			},
 		},
 	}
@@ -220,7 +220,7 @@ func (b *backend) handleRoleRead(ctx context.Context, req *logical.Request, d *f
 	}, nil
 }
 
-func (b *backend) pathRoleList(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleRoleList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
 	roles, err := req.Storage.List(ctx, "role/")
 	if err != nil {
 		return nil, err
@@ -228,7 +228,7 @@ func (b *backend) pathRoleList(ctx context.Context, req *logical.Request, d *fra
 	return logical.ListResponse(roles), nil
 }
 
-func (b *backend) pathRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) handleRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
 	role, err := b.getRole(ctx, req.Storage, data.Get("name").(string))
 	if err != nil {
 		return false, err

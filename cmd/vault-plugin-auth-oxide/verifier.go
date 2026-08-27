@@ -35,12 +35,23 @@ func (b *backend) pathVerifier() *framework.Path {
 			},
 		},
 		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.CreateOperation: b.pathVerifierCreateUpdate,
-			logical.UpdateOperation: b.pathVerifierCreateUpdate,
-			logical.DeleteOperation: b.pathVerifierDelete,
-			logical.ReadOperation:   b.pathVerifierRead,
+			logical.CreateOperation: b.handleVerifierCreateUpdate,
+			logical.UpdateOperation: b.handleVerifierCreateUpdate,
+			logical.DeleteOperation: b.handleVerifierDelete,
+			logical.ReadOperation:   b.handleVerifierRead,
 		},
-		ExistenceCheck: b.pathVerifierExistenceCheck,
+		ExistenceCheck: b.handleVerifierExistenceCheck,
+	}
+}
+
+func (b *backend) pathListVerifier() *framework.Path {
+	return &framework.Path{
+		Pattern: "verifier/?",
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.ListOperation: &framework.PathOperation{
+				Callback: b.handleVerifierList,
+			},
+		},
 	}
 }
 
@@ -60,7 +71,7 @@ func (b *backend) getVerifier(ctx context.Context, s logical.Storage, name strin
 	return verifier, nil
 }
 
-func (b *backend) pathVerifierCreateUpdate(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierCreateUpdate(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -106,7 +117,7 @@ func (b *backend) pathVerifierCreateUpdate(ctx context.Context, req *logical.Req
 	return &logical.Response{}, nil
 }
 
-func (b *backend) pathVerifierDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -119,7 +130,7 @@ func (b *backend) pathVerifierDelete(ctx context.Context, req *logical.Request, 
 	return &logical.Response{}, nil
 }
 
-func (b *backend) pathVerifierRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -140,7 +151,15 @@ func (b *backend) pathVerifierRead(ctx context.Context, req *logical.Request, d 
 	}, nil
 }
 
-func (b *backend) pathVerifierExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) handleVerifierList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+	verifiers, err := req.Storage.List(ctx, "verifier/")
+	if err != nil {
+		return nil, err
+	}
+	return logical.ListResponse(verifiers), nil
+}
+
+func (b *backend) handleVerifierExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
 	verifier, err := b.getVerifier(ctx, req.Storage, data.Get("name").(string))
 	if err != nil {
 		return false, err
