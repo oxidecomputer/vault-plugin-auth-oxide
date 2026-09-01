@@ -1,3 +1,19 @@
 = vault-plugin-auth-oxide
 
-A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via attestation/RFD 605.
+A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via attestation (https://rfd.shared.oxide.computer/rfd/0605[RFD 605]).
+
+== Usage
+
+* Request a nonce from the auth plugin.
+* Request an attestation bundle from the vsock interface, using the nonce.
+* Request an auth token from Vault/OpenBao, passing both the nonce and the attestation bundle.
+
+== Caveats
+
+* Performance. The initial version of this auth plugin relies on Oxide instance attestation, described in RFD 605, to prove the identity of the requesting Oxide instance to the plugin. Attestation makes use of the root of trust device (RoT), which handles requests in series. As of this writing, the `attest` request takes about 100 ms. If many instances running on the same sled attempt to authenticate via this plugin at the same time, their attestation requests will queue. The impact of this queueing can be mitigated by increasing the TTL of the Vault/OpenBao auth tokens.
+
+Note that attestation isn't the only workload that depends on the RoT. The management network also uses the RoT, but it accesses it at a https://github.com/oxidecomputer/hubris/blob/9e553c76105497896a725b89558b46fda0ee10c6/doc/tasks.adoc#L14-L17[higher priority] (https://github.com/oxidecomputer/hubris/blob/9e553c76105497896a725b89558b46fda0ee10c6/app/gimlet/base.toml#L272-L274[`control_plane_agent`], or priority 7) than attestation (https://github.com/oxidecomputer/hubris/blob/9e553c76105497896a725b89558b46fda0ee10c6/app/gimlet/base.toml#L240-L245[`host_sp_comms`], or priority 8). As a result, attestation can only delay RoT access from the management network by the duration of a single RoT request. Similarly, trust quorum also makes use of the RoT. While trust quorum accesses the RoT at the same priority (`host_sp_comms`) as attestation, trust quorum is able to claim the IPCC lock faster than attestation: https://github.com/oxidecomputer/omicron/blob/b5b984874615a5518d6e431f9723c1a2a2ac672b/sled-agent/src/rot.rs#L244-L270[attestation requests queue in sled-agent] and don't request the IPCC lock until ready, while trust quorum requests wait on the lock synchronously. As a result, trust quorum is also delayed for no longer than the duration of a single RoT request, even under heavy attestation load.
+
+* Versioning. This plugin relies on Oxide instance attestation, which is accessed over the vsock interface. This interface isn't yet versioned, and may change in future Oxide releases. We'll update the plugin to accommodate any changes to the vsock interface.
+
+* Future state. We hope to add first-class support for additional authentication/authorization flows in the future, such as authentication from Oxide instances to the Oxide control plane, and inbound and outbound OIDC. Once the Oxide control plane adopts these features, users will be able to authenticate to Vault/OpenBao, and other services, without using this plugin; for example, users who wish to authenticate from an Oxide instance to Vault/OpenBao would be able to use the https://developer.hashicorp.com/vault/docs/auth/jwt[jwt plugin] instead.
