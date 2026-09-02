@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/helper/locksutil"
-	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/locksutil"
+	"github.com/openbao/openbao/sdk/v2/logical"
 	"github.com/oxidecomputer/oxide.go/oxide"
 )
+
+const nonceTTL = 5 * time.Minute
 
 type nonceState struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -52,7 +54,7 @@ func (b *backend) handleAuthNonce(ctx context.Context, req *logical.Request, d *
 	rand.Read(nonce[:])
 	encoded := hex.EncodeToString(nonce[:])
 
-	state := nonceState{ExpiresAt: time.Now().Add(time.Minute)}
+	state := nonceState{ExpiresAt: time.Now().Add(nonceTTL)}
 
 	entry, err := logical.StorageEntryJSON("nonce/"+encoded, state)
 	if err != nil {
@@ -127,7 +129,9 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 		},
 	}
 
-	role.PopulateTokenAuth(auth)
+	if err := role.PopulateTokenAuth(auth, req); err != nil {
+		return nil, err
+	}
 	auth.Renewable = false
 
 	return &logical.Response{

@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hashicorp/vault/sdk/framework"
-	"github.com/hashicorp/vault/sdk/helper/tokenutil"
-	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/openbao/openbao/sdk/v2/framework"
+	"github.com/openbao/openbao/sdk/v2/helper/tokenutil"
+	"github.com/openbao/openbao/sdk/v2/logical"
 )
 
 type oxideRole struct {
