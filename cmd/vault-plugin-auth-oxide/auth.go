@@ -83,7 +83,7 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 		return nil, err
 	}
 	if role == nil {
-		return nil, logical.ErrInvalidCredentials
+		return logical.ErrorResponse("invalid role %q", roleName), nil
 	}
 
 	nonce := d.Get("nonce").(string)
