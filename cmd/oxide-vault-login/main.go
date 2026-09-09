@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/mdlayher/vsock"
 	"github.com/openbao/openbao/api/v2"
@@ -116,19 +117,23 @@ func helper(ctx context.Context, client *api.Client, role string) (string, error
 func main() {
 	ctx := context.Background()
 
-	role := flag.String("role", "", "oxide role")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s ROLE\n", filepath.Base(os.Args[0]))
+	}
+
 	flag.Parse()
-	if *role == "" {
+	if flag.NArg() != 1 {
 		flag.Usage()
 		os.Exit(2)
 	}
+	role := flag.Arg(0)
 
 	client, err := api.NewClient(api.DefaultConfig())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	token, err := helper(ctx, client, *role)
+	token, err := helper(ctx, client, role)
 	if err != nil {
 		log.Fatal(err)
 	}
