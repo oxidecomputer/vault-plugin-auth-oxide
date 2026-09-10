@@ -1,12 +1,70 @@
 = vault-plugin-auth-oxide
 
-A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via attestation (https://rfd.shared.oxide.computer/rfd/0605[RFD 605]).
+A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via instance attestation (https://rfd.shared.oxide.computer/rfd/0605[RFD 605]).
+
+[source,mermaid]
+----
+sequenceDiagram
+	participant instance
+	participant vault-core
+	participant vault-plugin
+	participant propolis
+	participant nexus
+
+	instance ->> vault-core: Request nonce
+	vault-core ->> vault-plugin: Request nonce
+	vault-plugin ->> vault-core: Return nonce
+	vault-core ->> instance: Return nonce
+
+	instance ->> propolis: Request attestation bundle
+	propolis ->> instance: Return attestation bundle
+
+	instance ->> vault-core: Request authentication token
+	vault-core ->> vault-plugin: Request authentication
+	vault-plugin ->> vault-plugin: Verify attestation
+	vault-plugin ->> nexus: Look up instance metadata
+	vault-plugin ->> vault-plugin: Verify role against instance metadata
+	vault-plugin ->> vault-core: Return verification
+	vault-core ->> instance: Return authentication token
+----
 
 == Usage
 
-* Request a nonce from the auth plugin.
-* Request an attestation bundle from the vsock interface, using the nonce.
-* Request an auth token from Vault/OpenBao, passing both the nonce and the attestation bundle.
+=== Administrator
+
+To configure the plugin, create at least one `verifier` and at least one `role`. A `verifier` represents a given Oxide silo, along with its platform identity certificate. It's used to verify attestation bundles, and to look up instance metadata from the Oxide API:
+
+----
+vault write auth/oxide/verifier/example \
+    host="<OXIDE_HOST>" \
+    token="<OXIDE_TOKEN>" \
+    platform_identity=@"<PLATFORM_IDENTITY_CERT>"
+----
+
+A `role` associates a given `verifier` with one or more token policies, such that users who authenticate using that `role` can use the associated `policy`. Each `role` must specify at least one of `bound_project_ids`, `bound_project_names`, `bound_instance_ids`, and `bound_instance names`, and only Oxide instances that match *all* configured bound properties are allowed to access the role:
+
+----
+vault write auth/oxide/role/my-role \
+    verifier=example \
+    bound_project_ids="<PROJECT_ID>" \
+    bound_project_names="<PROJECT_NAME>" \
+    token_policies=my-token-policy \
+    token_ttl=1h
+----
+
+=== End user
+
+Workloads running on an Oxide instance can authenticate to Vault/OpenBao using the plugin:
+
+1. Request a nonce from the auth plugin.
+2. Request an attestation bundle from the vsock interface, using the nonce.
+3. Request an auth token from Vault/OpenBao, passing the nonce and the attestation bundle, as well as the role configured by the administrator.
+
+We also provide the `oxide-vault-login` to abstract the process:
+
+----
+oxide-vault-login my-role
+----
 
 == Caveats
 
