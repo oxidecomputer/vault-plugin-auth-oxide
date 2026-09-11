@@ -34,6 +34,7 @@ sequenceDiagram
 
 To configure the plugin, create at least one `verifier` and at least one `role`. A `verifier` represents a given Oxide silo, along with its platform identity certificate. It's used to verify attestation bundles, and to look up instance metadata from the Oxide API:
 
+[source,shell]
 ----
 vault write auth/oxide/verifier/example \
     host="<OXIDE_HOST>" \
@@ -41,8 +42,9 @@ vault write auth/oxide/verifier/example \
     platform_identity=@"<PLATFORM_IDENTITY_CERT>"
 ----
 
-A `role` associates a given `verifier` with one or more token policies, such that users who authenticate using that `role` can use the associated `policy`. Each `role` must specify at least one of `bound_project_ids`, `bound_project_names`, `bound_instance_ids`, and `bound_instance names`, and only Oxide instances that match *all* configured bound properties are allowed to access the role:
+A `role` associates a given `verifier` with one or more token policies, such that users who authenticate using that `role` can use the associated `policy`. Each `role` must specify at least one of `bound_project_ids`, `bound_project_names`, `bound_instance_ids`, and `bound_instance_names`, and only Oxide instances that match *all* configured bound properties are allowed to access the role:
 
+[source,shell]
 ----
 vault write auth/oxide/role/my-role \
     verifier=example \
@@ -56,9 +58,24 @@ vault write auth/oxide/role/my-role \
 
 Workloads running on an Oxide instance can authenticate to Vault/OpenBao using the plugin:
 
-1. Request a nonce from the auth plugin.
+1. Request a nonce from the auth plugin:
++
+[source,shell]
+----
+vault write -f auth/oxide/nonce
+----
+
 2. Request an attestation bundle from the vsock interface, using the nonce.
-3. Request an auth token from Vault/OpenBao, passing the nonce and the attestation bundle, as well as the role configured by the administrator.
+
+3. Request an auth token from Vault/OpenBao, passing the nonce and the attestation bundle, as well as the role configured by the administrator:
++
+[source,shell]
+----
+vault write auth/oxide/login \
+	role=my-role \
+	nonce="$NONCE" \
+	attestation=@attestation.json
+----
 
 We also provide the `oxide-vault-login` to abstract the process:
 
