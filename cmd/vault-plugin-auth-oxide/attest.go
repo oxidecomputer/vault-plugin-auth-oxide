@@ -100,16 +100,25 @@ func parsePlatformCert(raw []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(block.Bytes)
 }
 
-func verifyAttestationSignature(nonce string, verifier *oxideVerifier, attestation *parsedAttestation) error {
+func verifyAttestationSignature(
+	nonce string,
+	verifier *oxideVerifier,
+	attestation *parsedAttestation,
+) error {
 	if len(attestation.certChain) == 0 {
 		return errors.New("expected at least one cert, got none")
 	}
 	aliasPubKey, ok := attestation.certChain[0].PublicKey.(ed25519.PublicKey)
 	if !ok {
-		return fmt.Errorf("expected ed25519 key, got %q", attestation.certChain[0].PublicKeyAlgorithm)
+		return fmt.Errorf(
+			"expected ed25519 key, got %q",
+			attestation.certChain[0].PublicKeyAlgorithm,
+		)
 	}
 	for idx := 0; idx < len(attestation.certChain)-1; idx++ {
-		if err := attestation.certChain[idx].CheckSignatureFrom(attestation.certChain[idx+1]); err != nil {
+		if err := attestation.certChain[idx].CheckSignatureFrom(
+			attestation.certChain[idx+1],
+		); err != nil {
 			return err
 		}
 	}
@@ -119,15 +128,23 @@ func verifyAttestationSignature(nonce string, verifier *oxideVerifier, attestati
 	if err != nil {
 		return err
 	}
-	if err := attestation.certChain[len(attestation.certChain)-1].CheckSignatureFrom(platformIdentity); err != nil {
+	if err := attestation.certChain[len(attestation.certChain)-1].CheckSignatureFrom(
+		platformIdentity,
+	); err != nil {
 		return err
 	}
 
 	if len(attestation.signature) != 65 {
-		return fmt.Errorf("got invalid attestation signature length %d, expected 65", len(attestation.signature))
+		return fmt.Errorf(
+			"got invalid attestation signature length %d, expected 65",
+			len(attestation.signature),
+		)
 	}
 	if attestation.signature[0] != 0 {
-		return fmt.Errorf("got invalid attestation signature type %q, expected 0", attestation.signature[0])
+		return fmt.Errorf(
+			"got invalid attestation signature type %q, expected 0",
+			attestation.signature[0],
+		)
 	}
 	signature := attestation.signature[1:]
 

@@ -49,7 +49,11 @@ func (b *backend) pathAuthLogin() *framework.Path {
 	}
 }
 
-func (b *backend) handleAuthNonce(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleAuthNonce(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	var nonce [32]byte
 	rand.Read(nonce[:])
 	encoded := hex.EncodeToString(nonce[:])
@@ -74,7 +78,11 @@ func (b *backend) handleAuthNonce(ctx context.Context, req *logical.Request, d *
 	}, nil
 }
 
-func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleAuthLogin(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	attestation := d.Get("attestation").(string)
 
 	roleName := d.Get("role").(string)
@@ -96,12 +104,22 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 		return nil, fmt.Errorf("got empty verifier from verifier key %q", role.Verifier)
 	}
 
-	oxideClient, err := oxide.NewClient(oxide.WithHost(verifier.Host), oxide.WithToken(verifier.Token))
+	oxideClient, err := oxide.NewClient(
+		oxide.WithHost(verifier.Host),
+		oxide.WithToken(verifier.Token),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	instanceDetails, err := b.verifyAttestation(ctx, req.Storage, oxideClient, verifier, attestation, nonce)
+	instanceDetails, err := b.verifyAttestation(
+		ctx,
+		req.Storage,
+		oxideClient,
+		verifier,
+		attestation,
+		nonce,
+	)
 	if err != nil {
 		b.Logger().Warn("error verifying attestation", "role", role, "error", err)
 		return nil, logical.ErrInvalidCredentials
@@ -139,7 +157,14 @@ func (b *backend) handleAuthLogin(ctx context.Context, req *logical.Request, d *
 	}, nil
 }
 
-func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage, client *oxide.Client, verifier *oxideVerifier, attestation string, nonce string) (*instanceDetails, error) {
+func (b *backend) verifyAttestation(
+	ctx context.Context,
+	storage logical.Storage,
+	client *oxide.Client,
+	verifier *oxideVerifier,
+	attestation string,
+	nonce string,
+) (*instanceDetails, error) {
 	var raw rawAttestation
 	if err := json.Unmarshal([]byte(attestation), &raw); err != nil {
 		return nil, err
@@ -164,7 +189,11 @@ func (b *backend) verifyAttestation(ctx context.Context, storage logical.Storage
 		return nil, err
 	}
 	if instance.ProjectId != parsed.vmInstanceConf.Project {
-		return nil, fmt.Errorf("expected project id %q, got %q", parsed.vmInstanceConf.Project, instance.ProjectId)
+		return nil, fmt.Errorf(
+			"expected project id %q, got %q",
+			parsed.vmInstanceConf.Project,
+			instance.ProjectId,
+		)
 	}
 
 	project, err := client.ProjectView(ctx, oxide.ProjectViewParams{

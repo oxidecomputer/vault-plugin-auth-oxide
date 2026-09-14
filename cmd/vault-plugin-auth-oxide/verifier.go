@@ -55,7 +55,11 @@ func (b *backend) pathListVerifier() *framework.Path {
 	}
 }
 
-func (b *backend) getVerifier(ctx context.Context, s logical.Storage, name string) (*oxideVerifier, error) {
+func (b *backend) getVerifier(
+	ctx context.Context,
+	s logical.Storage,
+	name string,
+) (*oxideVerifier, error) {
 	raw, err := s.Get(ctx, "verifier/"+strings.ToLower(name))
 	if err != nil {
 		return nil, err
@@ -71,7 +75,11 @@ func (b *backend) getVerifier(ctx context.Context, s logical.Storage, name strin
 	return verifier, nil
 }
 
-func (b *backend) handleVerifierCreateUpdate(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierCreateUpdate(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -117,7 +125,11 @@ func (b *backend) handleVerifierCreateUpdate(ctx context.Context, req *logical.R
 	return &logical.Response{}, nil
 }
 
-func (b *backend) handleVerifierDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierDelete(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -130,7 +142,11 @@ func (b *backend) handleVerifierDelete(ctx context.Context, req *logical.Request
 	return &logical.Response{}, nil
 }
 
-func (b *backend) handleVerifierRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierRead(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	verifierName := d.Get("name").(string)
 	if verifierName == "" {
 		return logical.ErrorResponse("must set verifier name"), nil
@@ -151,7 +167,11 @@ func (b *backend) handleVerifierRead(ctx context.Context, req *logical.Request, 
 	}, nil
 }
 
-func (b *backend) handleVerifierList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleVerifierList(
+	ctx context.Context,
+	req *logical.Request,
+	_ *framework.FieldData,
+) (*logical.Response, error) {
 	verifiers, err := req.Storage.List(ctx, "verifier/")
 	if err != nil {
 		return nil, err
@@ -159,7 +179,11 @@ func (b *backend) handleVerifierList(ctx context.Context, req *logical.Request, 
 	return logical.ListResponse(verifiers), nil
 }
 
-func (b *backend) handleVerifierExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) handleVerifierExistenceCheck(
+	ctx context.Context,
+	req *logical.Request,
+	data *framework.FieldData,
+) (bool, error) {
 	verifier, err := b.getVerifier(ctx, req.Storage, data.Get("name").(string))
 	if err != nil {
 		return false, err

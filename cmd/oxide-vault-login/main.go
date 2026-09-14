@@ -79,7 +79,13 @@ func getAttestation(ctx context.Context, nonce string) (string, error) {
 	return string(bundle), nil
 }
 
-func getToken(ctx context.Context, client *api.Client, role string, nonce string, attestation string) (string, error) {
+func getToken(
+	ctx context.Context,
+	client *api.Client,
+	role string,
+	nonce string,
+	attestation string,
+) (string, error) {
 	secret, err := client.Logical().WriteWithContext(ctx, "/auth/oxide/login", map[string]any{
 		"nonce":       nonce,
 		"attestation": attestation,

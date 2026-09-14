@@ -88,7 +88,11 @@ func (b *backend) getRole(ctx context.Context, s logical.Storage, name string) (
 	return role, nil
 }
 
-func (b *backend) handleRoleCreateUpdate(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleRoleCreateUpdate(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	roleName := d.Get("name").(string)
 	if roleName == "" {
 		return logical.ErrorResponse("must set role name"), nil
@@ -182,7 +186,11 @@ func (r *oxideRole) authorize(details *instanceDetails) error {
 	return nil
 }
 
-func (b *backend) handleRoleDelete(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleRoleDelete(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	roleName := d.Get("name").(string)
 	if roleName == "" {
 		return logical.ErrorResponse("must set role name"), nil
@@ -195,7 +203,11 @@ func (b *backend) handleRoleDelete(ctx context.Context, req *logical.Request, d 
 	return &logical.Response{}, nil
 }
 
-func (b *backend) handleRoleRead(ctx context.Context, req *logical.Request, d *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleRoleRead(
+	ctx context.Context,
+	req *logical.Request,
+	d *framework.FieldData,
+) (*logical.Response, error) {
 	roleName := d.Get("name").(string)
 	if roleName == "" {
 		return logical.ErrorResponse("must set role name"), nil
@@ -220,7 +232,11 @@ func (b *backend) handleRoleRead(ctx context.Context, req *logical.Request, d *f
 	}, nil
 }
 
-func (b *backend) handleRoleList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+func (b *backend) handleRoleList(
+	ctx context.Context,
+	req *logical.Request,
+	_ *framework.FieldData,
+) (*logical.Response, error) {
 	roles, err := req.Storage.List(ctx, "role/")
 	if err != nil {
 		return nil, err
@@ -228,7 +244,11 @@ func (b *backend) handleRoleList(ctx context.Context, req *logical.Request, _ *f
 	return logical.ListResponse(roles), nil
 }
 
-func (b *backend) handleRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) handleRoleExistenceCheck(
+	ctx context.Context,
+	req *logical.Request,
+	data *framework.FieldData,
+) (bool, error) {
 	role, err := b.getRole(ctx, req.Storage, data.Get("name").(string))
 	if err != nil {
 		return false, err
