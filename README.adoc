@@ -1,6 +1,6 @@
 = vault-plugin-auth-oxide
 
-A proof of concept Vault/OpenBao auth plugin that supports authentication to Vault via instance attestation (https://rfd.shared.oxide.computer/rfd/0605[RFD 605]).
+A Vault/OpenBao auth plugin that supports authentication to Vault via instance attestation (https://rfd.shared.oxide.computer/rfd/0605[RFD 605]).
 
 [source,mermaid]
 ----
