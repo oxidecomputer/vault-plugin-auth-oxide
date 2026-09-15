@@ -101,20 +101,26 @@ func getToken(
 	return token, nil
 }
 
-func helper(ctx context.Context, client *api.Client, role string) (string, error) {
+func helper(ctx context.Context, client *api.Client, role string, debug bool) (string, error) {
 	nonce, err := getNonce(ctx, client)
 	if err != nil {
 		return "", fmt.Errorf("getting nonce: %w", err)
+	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "nonce: %s\n", nonce)
 	}
 
 	attestation, err := getAttestation(ctx, nonce)
 	if err != nil {
 		return "", fmt.Errorf("getting attestation: %w", err)
 	}
+	if debug {
+		fmt.Fprintf(os.Stderr, "attestation: %s", attestation)
+	}
 
 	token, err := getToken(ctx, client, role, nonce, attestation)
 	if err != nil {
-		return "", fmt.Errorf("getting token: %w", err)
+		return "", fmt.Errorf("getting token: %s", err)
 	}
 
 	return token, nil
@@ -124,8 +130,14 @@ func main() {
 	ctx := context.Background()
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s ROLE\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(
+			flag.CommandLine.Output(),
+			"usage: %s [OPTIONS] ROLE\n",
+			filepath.Base(os.Args[0]),
+		)
+		flag.PrintDefaults()
 	}
+	debug := flag.Bool("debug", false, "print nonce and attestation bundle to stderr")
 
 	flag.Parse()
 	if flag.NArg() != 1 {
@@ -139,7 +151,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	token, err := helper(ctx, client, role)
+	token, err := helper(ctx, client, role, *debug)
 	if err != nil {
 		log.Fatal(err)
 	}
