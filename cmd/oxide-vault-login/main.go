@@ -120,7 +120,7 @@ func helper(ctx context.Context, client *api.Client, role string, debug bool) (s
 
 	token, err := getToken(ctx, client, role, nonce, attestation)
 	if err != nil {
-		return "", fmt.Errorf("getting token: %s", err)
+		return "", fmt.Errorf("getting token: %w", err)
 	}
 
 	return token, nil
