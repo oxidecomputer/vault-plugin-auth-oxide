@@ -48,7 +48,7 @@ type backend struct {
 
 const backendHelp = "The Oxide plugin backend allows Oxide instances to authenticate to Vault using instance attestation."
 
-func Backend(c *logical.BackendConfig) *backend {
+func Backend(_ *logical.BackendConfig) *backend {
 	var b backend
 
 	b.Backend = &framework.Backend{
