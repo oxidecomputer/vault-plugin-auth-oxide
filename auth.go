@@ -58,17 +58,8 @@ func (b *backend) handleAuthNonce(
 	rand.Read(nonce[:])
 	encoded := hex.EncodeToString(nonce[:])
 
-	state := nonceState{ExpiresAt: time.Now().Add(nonceTTL)}
-
-	entry, err := logical.StorageEntryJSON("nonce/"+encoded, state)
-	if err != nil {
-		return nil, err
-	}
-	if entry == nil {
-		return nil, fmt.Errorf("failed to create storage entry for nonce %s", encoded)
-	}
-	if err = req.Storage.Put(ctx, entry); err != nil {
-		return nil, err
+	if err := writeNonce(ctx, req.Storage, encoded, time.Now().Add(nonceTTL)); err != nil {
+		return nil, fmt.Errorf("failed to write nonce to storage: %w", err)
 	}
 
 	return &logical.Response{
@@ -76,6 +67,26 @@ func (b *backend) handleAuthNonce(
 			"nonce": encoded,
 		},
 	}, nil
+}
+
+func writeNonce(
+	ctx context.Context,
+	storage logical.Storage,
+	nonce string,
+	expiresAt time.Time,
+) error {
+	state := nonceState{ExpiresAt: expiresAt}
+	entry, err := logical.StorageEntryJSON("nonce/"+nonce, state)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return fmt.Errorf("failed to create storage entry for nonce %s", nonce)
+	}
+	if err = storage.Put(ctx, entry); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *backend) handleAuthLogin(
@@ -212,7 +223,11 @@ func (b *backend) verifyAttestation(
 }
 
 // verifyNonce checks that the nonce is valid and not expired, then deletes it from storage.
-func (b *backend) verifyNonce(ctx context.Context, storage logical.Storage, nonce string) error {
+func (b *backend) verifyNonce(
+	ctx context.Context,
+	storage logical.Storage,
+	nonce string,
+) (retErr error) {
 	if _, err := hex.DecodeString(nonce); err != nil {
 		return fmt.Errorf("invalid nonce %q", nonce)
 	}
@@ -231,6 +246,14 @@ func (b *backend) verifyNonce(ctx context.Context, storage logical.Storage, nonc
 		return fmt.Errorf("got empty state for nonce %q", nonce)
 	}
 
+	// Whether the nonce is valid or not, ensure that it's deleted from storage at the end of the
+	// request.
+	defer func() {
+		if err := storage.Delete(ctx, nonceKey); err != nil {
+			retErr = err
+		}
+	}()
+
 	var state nonceState
 	if err := json.Unmarshal(raw.Value, &state); err != nil {
 		return err
@@ -238,11 +261,8 @@ func (b *backend) verifyNonce(ctx context.Context, storage logical.Storage, nonc
 	if time.Now().After(state.ExpiresAt) {
 		return fmt.Errorf("nonce %q expired at %q", nonce, state.ExpiresAt)
 	}
-	if err := storage.Delete(ctx, nonceKey); err != nil {
-		return err
-	}
 
-	return nil
+	return retErr
 }
 
 type instanceDetails struct {
