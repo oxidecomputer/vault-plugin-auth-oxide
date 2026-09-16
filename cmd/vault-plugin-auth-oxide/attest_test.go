@@ -86,7 +86,7 @@ func TestVerifyAttestation(t *testing.T) {
 			attestation: &attestationBadChain,
 			nonce:       nonce,
 			verifier:    verifier,
-			wantErr:     "Ed25519 verification failure",
+			wantErr:     "certificate signed by unknown authority",
 		},
 		{
 			name:        "sad bad signature",
@@ -114,7 +114,7 @@ func TestVerifyAttestation(t *testing.T) {
 			attestation: parsed,
 			nonce:       nonce,
 			verifier:    badVerifier,
-			wantErr:     "ECDSA verification failure",
+			wantErr:     "certificate signed by unknown authority",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
