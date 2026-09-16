@@ -168,10 +168,16 @@ func (b *backend) handleAuthLogin(
 	}, nil
 }
 
+//go:generate go tool -modfile=tools/go.mod mockgen -source=auth.go -destination=oxide_client_mock_test.go -package=oxideauth -mock_names=oxideClient=MockOxideClient
+type oxideClient interface {
+	InstanceView(context.Context, oxide.InstanceViewParams) (*oxide.Instance, error)
+	ProjectView(context.Context, oxide.ProjectViewParams) (*oxide.Project, error)
+}
+
 func (b *backend) verifyAttestation(
 	ctx context.Context,
 	storage logical.Storage,
-	client *oxide.Client,
+	client oxideClient,
 	verifier *oxideVerifier,
 	attestation string,
 	nonce string,
@@ -193,18 +199,32 @@ func (b *backend) verifyAttestation(
 		return nil, err
 	}
 
-	instance, err := client.InstanceView(ctx, oxide.InstanceViewParams{
-		Instance: oxide.NameOrId(parsed.vmInstanceConf.Uuid),
-	})
+	details, err := getInstanceDetails(ctx, client, parsed.vmInstanceConf.Uuid)
 	if err != nil {
 		return nil, err
 	}
-	if instance.ProjectId != parsed.vmInstanceConf.Project {
+
+	if details.ProjectID != parsed.vmInstanceConf.Project {
 		return nil, fmt.Errorf(
 			"expected project id %q, got %q",
 			parsed.vmInstanceConf.Project,
-			instance.ProjectId,
+			details.ProjectID,
 		)
+	}
+
+	return details, nil
+}
+
+func getInstanceDetails(
+	ctx context.Context,
+	client oxideClient,
+	instanceID string,
+) (*instanceDetails, error) {
+	instance, err := client.InstanceView(ctx, oxide.InstanceViewParams{
+		Instance: oxide.NameOrId(instanceID),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	project, err := client.ProjectView(ctx, oxide.ProjectViewParams{

@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/openbao/openbao/sdk/v2/logical"
+	"github.com/oxidecomputer/oxide.go/oxide"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 type deleteFailStorage struct {
@@ -100,4 +102,37 @@ func TestVerifyNonce(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetInstanceDetails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	oxideClient := NewMockOxideClient(ctrl)
+
+	instanceID := "10000000-0000-0000-0000-000000000001"
+	projectID := "10000000-0000-0000-0000-000000000002"
+	instanceName := "test-instance"
+	projectName := "test-project"
+
+	oxideClient.EXPECT().InstanceView(gomock.Any(), oxide.InstanceViewParams{
+		Instance: oxide.NameOrId(instanceID),
+	}).Return(&oxide.Instance{
+		Id:        instanceID,
+		Name:      oxide.Name(instanceName),
+		ProjectId: projectID,
+	}, nil)
+	oxideClient.EXPECT().ProjectView(gomock.Any(), oxide.ProjectViewParams{
+		Project: oxide.NameOrId(projectID),
+	}).Return(&oxide.Project{
+		Id:   projectID,
+		Name: oxide.Name(projectName),
+	}, nil)
+
+	details, err := getInstanceDetails(context.Background(), oxideClient, instanceID)
+	require.NoError(t, err)
+	require.Equal(t, &instanceDetails{
+		InstanceID:   instanceID,
+		ProjectID:    projectID,
+		InstanceName: instanceName,
+		ProjectName:  projectName,
+	}, details)
 }
