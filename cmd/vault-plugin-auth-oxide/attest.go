@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"crypto/sha3"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
+	"time"
 )
 
 type rawAttestation struct {
@@ -105,33 +108,20 @@ func verifyAttestationSignature(
 	verifier *oxideVerifier,
 	attestation *parsedAttestation,
 ) error {
-	if len(attestation.certChain) == 0 {
-		return errors.New("expected at least one cert, got none")
-	}
-	aliasPubKey, ok := attestation.certChain[0].PublicKey.(ed25519.PublicKey)
-	if !ok {
-		return fmt.Errorf(
-			"expected ed25519 key, got %q",
-			attestation.certChain[0].PublicKeyAlgorithm,
-		)
-	}
-	for idx := 0; idx < len(attestation.certChain)-1; idx++ {
-		if err := attestation.certChain[idx].CheckSignatureFrom(
-			attestation.certChain[idx+1],
-		); err != nil {
-			return err
-		}
-	}
-
-	// The final cert in the cert chain must have been signed by the platform root.
 	platformIdentity, err := parsePlatformCert([]byte(verifier.PlatformIdentity))
 	if err != nil {
 		return err
 	}
-	if err := attestation.certChain[len(attestation.certChain)-1].CheckSignatureFrom(
-		platformIdentity,
+	if err := verifyAttestationCertificates(
+		attestation.certChain, platformIdentity, time.Now(),
 	); err != nil {
 		return err
+	}
+
+	leaf := attestation.certChain[0]
+	aliasPubKey, ok := leaf.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("expected ed25519 key, got %q", leaf.PublicKeyAlgorithm)
 	}
 
 	if len(attestation.signature) != 65 {
@@ -167,4 +157,61 @@ func verifyAttestationSignature(
 	}
 
 	return nil
+}
+
+var diceTCBInfoOID = asn1.ObjectIdentifier{2, 23, 133, 5, 4, 1}
+
+// verifyAttestationCertificates verifies the certificate chain, from the leaf to the intermediates
+// (both provided via the attestation bundle), to the manufacturing certificate, configured in the
+// `verifier`.
+func verifyAttestationCertificates(
+	chain []*x509.Certificate,
+	root *x509.Certificate,
+	now time.Time,
+) error {
+	if len(chain) == 0 {
+		return errors.New("expected at least one cert, got none")
+	}
+	leaf, _ := extractTCBInfo(chain[0])
+
+	roots := x509.NewCertPool()
+	root, _ = extractTCBInfo(root)
+	roots.AddCert(root)
+	intermediates := x509.NewCertPool()
+	for _, cert := range chain[1:] {
+		cert, _ = extractTCBInfo(cert)
+		intermediates.AddCert(cert)
+	}
+	_, err := leaf.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		CurrentTime:   now,
+	})
+	if err != nil {
+		return fmt.Errorf("verifying attestation certificate chain: %w", err)
+	}
+	return nil
+}
+
+// extractTCBInfo extracts the DICE TCB extension from the certificate. We return a clone of the
+// original certificate with the `UnhandledCriticalExtension` removed, so that subsequent calls to
+// `Verify` succeed, as well as the extracted TCB info.
+//
+//nolint:unparam
+func extractTCBInfo(cert *x509.Certificate) (*x509.Certificate, []byte) {
+	var tcbInfo []byte
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(diceTCBInfoOID) {
+			tcbInfo = ext.Value
+			break
+		}
+	}
+	clone := *cert
+	clone.UnhandledCriticalExtensions = slices.DeleteFunc(
+		slices.Clone(cert.UnhandledCriticalExtensions),
+		func(oid asn1.ObjectIdentifier) bool {
+			return oid.Equal(diceTCBInfoOID)
+		},
+	)
+	return &clone, tcbInfo
 }
