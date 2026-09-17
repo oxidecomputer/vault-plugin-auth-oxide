@@ -3,6 +3,7 @@ package oxideauth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,54 @@ func TestVerifyNonce(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPruneNonces(t *testing.T) {
+	now := time.Now()
+
+	ctx := t.Context()
+	var storage logical.Storage = &logical.InmemStorage{}
+
+	config := logical.TestBackendConfig()
+	config.StorageView = storage
+
+	rawBackend, err := Factory(ctx, config)
+	require.NoError(t, err)
+	backend := rawBackend.(*backend)
+
+	// Write each nonce to storage.
+	goodNonce := fmt.Sprintf(`{"expires_at": "%s"}`, now.Add(time.Hour).Format(time.RFC3339Nano))
+	require.NoError(t, storage.Put(ctx, &logical.StorageEntry{
+		Key:   "nonce/good",
+		Value: []byte(goodNonce),
+	}))
+	badNonceInvalid := `{`
+	require.NoError(t, storage.Put(ctx, &logical.StorageEntry{
+		Key:   "nonce/bad-invalid",
+		Value: []byte(badNonceInvalid),
+	}))
+	badNonceExpired := fmt.Sprintf(
+		`{"expires_at": "%s"}`,
+		now.Add(-time.Hour).Format(time.RFC3339Nano),
+	)
+	require.NoError(t, storage.Put(ctx, &logical.StorageEntry{
+		Key:   "nonce/bad-expired",
+		Value: []byte(badNonceExpired),
+	}))
+
+	// Prune nonces, and assert that invalid/expired nonces are gone.
+	req := &logical.Request{Storage: storage}
+	require.NoError(t, backend.pruneNonces(ctx, req))
+
+	raw, err := storage.Get(ctx, "nonce/good")
+	require.NoError(t, err)
+	require.NotNil(t, raw)
+	raw, err = storage.Get(ctx, "nonce/bad-invalid")
+	require.NoError(t, err)
+	require.Nil(t, raw)
+	raw, err = storage.Get(ctx, "nonce/bad-expired")
+	require.NoError(t, err)
+	require.Nil(t, raw)
 }
 
 func TestGetInstanceDetails(t *testing.T) {

@@ -45,6 +45,7 @@ func Backend(_ *logical.BackendConfig) *backend {
 				"nonce",
 			},
 		},
+		PeriodicFunc: b.pruneNonces,
 	}
 
 	return &b
