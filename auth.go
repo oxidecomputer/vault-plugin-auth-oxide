@@ -274,12 +274,8 @@ func (b *backend) verifyNonce(
 		}
 	}()
 
-	var state nonceState
-	if err := json.Unmarshal(raw.Value, &state); err != nil {
+	if err := checkNonceState(nonce, raw.Value, time.Now()); err != nil {
 		return err
-	}
-	if time.Now().After(state.ExpiresAt) {
-		return fmt.Errorf("nonce %q expired at %q", nonce, state.ExpiresAt)
 	}
 
 	return retErr
@@ -291,4 +287,42 @@ type instanceDetails struct {
 
 	InstanceName string
 	ProjectName  string
+}
+
+// pruneNonces lists all stored nonces, then deletes any nonces that are either invalid or expired.
+// We run this as a `PeriodicFunc` so that we don't accumulate an unbounded number of invalid or
+// unconsumed nonces in storage.
+func (b *backend) pruneNonces(ctx context.Context, req *logical.Request) error {
+	nonces, err := req.Storage.List(ctx, "nonce/")
+	if err != nil {
+		return err
+	}
+	for _, nonce := range nonces {
+		key := "nonce/" + nonce
+		raw, err := req.Storage.Get(ctx, key)
+		if err != nil {
+			return fmt.Errorf("getting nonce %s: %w", nonce, err)
+		}
+		if raw == nil {
+			continue
+		}
+		if err := checkNonceState(nonce, raw.Value, time.Now()); err != nil {
+			b.Logger().Info("deleting nonce", "nonce", nonce, "reason", err)
+			if deleteErr := req.Storage.Delete(ctx, key); deleteErr != nil {
+				return fmt.Errorf("deleting nonce %s: %w", nonce, deleteErr)
+			}
+		}
+	}
+	return nil
+}
+
+func checkNonceState(nonce string, value []byte, now time.Time) error {
+	var state nonceState
+	if err := json.Unmarshal(value, &state); err != nil {
+		return err
+	}
+	if now.After(state.ExpiresAt) {
+		return fmt.Errorf("nonce %q expired at %q", nonce, state.ExpiresAt)
+	}
+	return nil
 }

@@ -85,7 +85,7 @@ oxide-vault-login my-role
 
 == Caveats
 
-* Verification. This auth plugin currently verifies the certificate chain and signature of the attestation bundle, but doesn't appraise the firmware measurements. In other words, the plugin checks that the attestation's certificate chain is trusted by the known platform certificate, and that its signature is valid, but doesn't check the firmware versions of the Oxide service processor (SP) or root of trust (RoT) devices; users of the plugin implicitly trust the Oxide platform. We'll add this verification in a future release if necessary.
+* Verification. This auth plugin currently verifies the certificate chain and signature of the attestation bundle, but doesn't appraise the firmware measurements. In other words, the plugin checks that the attestation's certificate chain is trusted by the known platform certificate, and that its signature is valid, but doesn't check the firmware versions of the Oxide service processor (SP) or root of trust (RoT) devices; users of the plugin implicitly trust the Oxide platform. This isn't an inherent limitation of the platform; we'll add this verification in a future release if necessary.
 
 * Performance. The initial version of this auth plugin relies on Oxide instance attestation, described in RFD 605, to prove the identity of the requesting Oxide instance to the plugin. Attestation makes use of the root of trust device (RoT), which handles requests in series. As of this writing, the `attest` request takes about 100 ms. If many instances running on the same sled attempt to authenticate via this plugin at the same time, their attestation requests will queue. The impact of this queueing can be mitigated by increasing the TTL of the Vault/OpenBao auth tokens.
 +
