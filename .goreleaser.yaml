@@ -1,0 +1,37 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: plugin
+    main: ./cmd/vault-plugin-auth-oxide
+    binary: vault-plugin-auth-oxide
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: login-helper
+    main: ./cmd/oxide-vault-login
+    binary: oxide-vault-login
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [binary]
+    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
+
+release:
+  prerelease: auto

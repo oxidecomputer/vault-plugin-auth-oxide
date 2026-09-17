@@ -14,4 +14,4 @@ jobs:
       with:
         go-version-file: go.mod
     - run: make lint
-    - run: go test -v ./...
+    - run: make test
