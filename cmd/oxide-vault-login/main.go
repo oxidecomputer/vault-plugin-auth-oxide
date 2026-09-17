@@ -42,7 +42,29 @@ func hexToIntSlice(encoded string) ([]int, error) {
 	return ints, nil
 }
 
-func getAttestation(ctx context.Context, nonce string) (string, error) {
+type attestFunc func(context.Context, []byte) ([]byte, error)
+
+func attest(ctx context.Context, request []byte) ([]byte, error) {
+	conn, err := vsock.Dial(vsock.Host, attestPort, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dialing vsock port: %w", err)
+	}
+	defer conn.Close()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := conn.SetDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("setting attestation deadline: %w", err)
+		}
+	}
+
+	if _, err := conn.Write(append(request, '\n')); err != nil {
+		return nil, fmt.Errorf("writing attestation request: %w", err)
+	}
+
+	return bufio.NewReader(conn).ReadBytes('\n')
+}
+
+func getAttestation(ctx context.Context, nonce string, attestFunc attestFunc) (string, error) {
 	nonceDecoded, err := hexToIntSlice(nonce)
 	if err != nil {
 		return "", fmt.Errorf("decoding nonce: %w", err)
@@ -55,25 +77,9 @@ func getAttestation(ctx context.Context, nonce string) (string, error) {
 		return "", fmt.Errorf("encoding attestation request: %w", err)
 	}
 
-	conn, err := vsock.Dial(vsock.Host, attestPort, nil)
+	bundle, err := attestFunc(ctx, request)
 	if err != nil {
-		return "", fmt.Errorf("dialing vsock port: %w", err)
-	}
-	defer conn.Close()
-
-	if deadline, ok := ctx.Deadline(); ok {
-		if err := conn.SetDeadline(deadline); err != nil {
-			return "", fmt.Errorf("setting attestation deadline: %w", err)
-		}
-	}
-
-	if _, err := conn.Write(append(request, '\n')); err != nil {
-		return "", fmt.Errorf("writing attestation request: %w", err)
-	}
-
-	bundle, err := bufio.NewReader(conn).ReadBytes('\n')
-	if err != nil {
-		return "", fmt.Errorf("reading attestation response: %w", err)
+		return "", fmt.Errorf("fetching attestation: %w", err)
 	}
 
 	return string(bundle), nil
@@ -101,7 +107,13 @@ func getToken(
 	return token, nil
 }
 
-func helper(ctx context.Context, client *api.Client, role string, debug bool) (string, error) {
+func helper(
+	ctx context.Context,
+	client *api.Client,
+	attestFunc attestFunc,
+	role string,
+	debug bool,
+) (string, error) {
 	nonce, err := getNonce(ctx, client)
 	if err != nil {
 		return "", fmt.Errorf("getting nonce: %w", err)
@@ -110,7 +122,7 @@ func helper(ctx context.Context, client *api.Client, role string, debug bool) (s
 		fmt.Fprintf(os.Stderr, "nonce: %s\n", nonce)
 	}
 
-	attestation, err := getAttestation(ctx, nonce)
+	attestation, err := getAttestation(ctx, nonce, attestFunc)
 	if err != nil {
 		return "", fmt.Errorf("getting attestation: %w", err)
 	}
@@ -151,7 +163,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	token, err := helper(ctx, client, role, *debug)
+	token, err := helper(ctx, client, attest, role, *debug)
 	if err != nil {
 		log.Fatal(err)
 	}
