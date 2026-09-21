@@ -168,12 +168,6 @@ func (b *backend) handleAuthLogin(
 	}, nil
 }
 
-//go:generate go tool -modfile=tools/go.mod mockgen -source=auth.go -destination=oxide_client_mock_test.go -package=oxideauth -mock_names=oxideClient=MockOxideClient
-type oxideClient interface {
-	InstanceView(context.Context, oxide.InstanceViewParams) (*oxide.Instance, error)
-	ProjectView(context.Context, oxide.ProjectViewParams) (*oxide.Project, error)
-}
-
 func (b *backend) verifyAttestation(
 	ctx context.Context,
 	storage logical.Storage,
