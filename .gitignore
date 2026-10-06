@@ -1,6 +1,7 @@
 # Binaries for programs and plugins
 /vault-plugin-auth-oxide
 /oxide-vault-login
+/fetch-platform-root
 *.exe
 *.exe~
 *.dll
