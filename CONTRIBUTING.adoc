@@ -1,0 +1,25 @@
+= Contributing to vault-plugin-auth-oxide
+
+== Development
+
+=== Running Tests
+
+[source,bash]
+----
+make test
+----
+
+== Releasing
+
+To create a new release:
+
+1. Merge the changes to `main` and ensure CI passes.
+2. Update your local `main` and tag the tested commit, replacing `vX.Y.Z` with the release version:
++
+[source,shell]
+----
+git tag vX.Y.Z
+git push origin vX.Y.Z
+----
+
+To request a release, open an issue using the https://github.com/oxidecomputer/vault-plugin-auth-oxide/issues/new?template=release.yaml[release issue template].
