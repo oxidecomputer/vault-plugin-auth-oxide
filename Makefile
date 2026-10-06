@@ -1,4 +1,4 @@
-.PHONY: lint fmt generate test
+.PHONY: lint fmt generate test test-integration
 
 lint:
 	go tool -modfile tools/go.mod golangci-lint run
@@ -11,3 +11,6 @@ generate:
 
 test:
 	go test -v ./...
+
+test-integration:
+	go test -v -tags=integration -count=1 -timeout=60s ./cmd/fetch-platform-root

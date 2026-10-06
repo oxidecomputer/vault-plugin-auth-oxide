@@ -29,6 +29,18 @@ builds:
       - amd64
       - arm64
 
+  - id: fetch-platform-root
+    main: ./cmd/fetch-platform-root
+    binary: fetch-platform-root
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
 archives:
   - formats: [binary]
     name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"

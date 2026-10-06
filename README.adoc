@@ -42,6 +42,8 @@ vault write auth/oxide/verifier/example \
     platform_identity=@"<PLATFORM_IDENTITY_CERT>"
 ----
 
+The Oxide platform identity certificate is distributed as a Helios package. To fetch the certificate, download the `fetch-platform-root` helper from the https://github.com/oxidecomputer/vault-plugin-auth-oxide/releases/latest[latest release] and run it. Or clone this repo and run `go run ./cmd/fetch-platform-root > platform-identity.pem`.
+
 A `role` associates a given `verifier` with one or more token policies, such that users who authenticate using that `role` can use the associated `policy`. Each `role` must specify at least one of `bound_project_ids`, `bound_project_names`, `bound_instance_ids`, and `bound_instance_names`, and only Oxide instances that match *all* configured bound properties are allowed to access the role:
 
 [source,shell]
