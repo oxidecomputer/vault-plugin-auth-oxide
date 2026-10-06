@@ -96,3 +96,7 @@ Note that attestation isn't the only workload that depends on the RoT. The manag
 * Versioning. This plugin relies on Oxide instance attestation, which is accessed over the vsock interface. This interface isn't yet versioned, and may change in future Oxide releases. We'll update the plugin to accommodate any changes to the vsock interface.
 
 * Future state. We hope to add first-class support for additional authentication/authorization flows in the future, such as authentication from Oxide instances to the Oxide control plane, and inbound and outbound OIDC. Once the Oxide control plane adopts these features, users will be able to authenticate to Vault/OpenBao, and other services, without using this plugin; for example, users who wish to authenticate from an Oxide instance to Vault/OpenBao would be able to use the https://developer.hashicorp.com/vault/docs/auth/jwt[jwt plugin] instead.
+
+== Contributing
+
+See link:CONTRIBUTING.adoc[CONTRIBUTING.adoc] for development and release instructions.
