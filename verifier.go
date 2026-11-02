@@ -34,11 +34,19 @@ func (b *backend) pathVerifier() *framework.Path {
 				Type: framework.TypeString,
 			},
 		},
-		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.CreateOperation: b.handleVerifierCreateUpdate,
-			logical.UpdateOperation: b.handleVerifierCreateUpdate,
-			logical.DeleteOperation: b.handleVerifierDelete,
-			logical.ReadOperation:   b.handleVerifierRead,
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.CreateOperation: &framework.PathOperation{
+				Callback: b.handleVerifierCreateUpdate,
+			},
+			logical.UpdateOperation: &framework.PathOperation{
+				Callback: b.handleVerifierCreateUpdate,
+			},
+			logical.DeleteOperation: &framework.PathOperation{
+				Callback: b.handleVerifierDelete,
+			},
+			logical.ReadOperation: &framework.PathOperation{
+				Callback: b.handleVerifierRead,
+			},
 		},
 		ExistenceCheck: b.handleVerifierExistenceCheck,
 	}

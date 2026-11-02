@@ -47,11 +47,19 @@ func (b *backend) pathRole() *framework.Path {
 				Type: framework.TypeCommaStringSlice,
 			},
 		},
-		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.CreateOperation: b.handleRoleCreateUpdate,
-			logical.UpdateOperation: b.handleRoleCreateUpdate,
-			logical.DeleteOperation: b.handleRoleDelete,
-			logical.ReadOperation:   b.handleRoleRead,
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.CreateOperation: &framework.PathOperation{
+				Callback: b.handleRoleCreateUpdate,
+			},
+			logical.UpdateOperation: &framework.PathOperation{
+				Callback: b.handleRoleCreateUpdate,
+			},
+			logical.DeleteOperation: &framework.PathOperation{
+				Callback: b.handleRoleDelete,
+			},
+			logical.ReadOperation: &framework.PathOperation{
+				Callback: b.handleRoleRead,
+			},
 		},
 		ExistenceCheck: b.handleRoleExistenceCheck,
 	}
