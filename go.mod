@@ -1,6 +1,6 @@
 module github.com/oxidecomputer/vault-plugin-auth-oxide
 
-go 1.26.2
+go 1.27.3
 
 require (
 	github.com/mdlayher/vsock v1.3.0

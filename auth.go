@@ -23,8 +23,10 @@ type nonceState struct {
 func (b *backend) pathAuthNonce() *framework.Path {
 	return &framework.Path{
 		Pattern: "nonce",
-		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.UpdateOperation: b.handleAuthNonce,
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.UpdateOperation: &framework.PathOperation{
+				Callback: b.handleAuthNonce,
+			},
 		},
 	}
 }
@@ -43,8 +45,10 @@ func (b *backend) pathAuthLogin() *framework.Path {
 				Type: framework.TypeString,
 			},
 		},
-		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.UpdateOperation: b.handleAuthLogin,
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.UpdateOperation: &framework.PathOperation{
+				Callback: b.handleAuthLogin,
+			},
 		},
 	}
 }
